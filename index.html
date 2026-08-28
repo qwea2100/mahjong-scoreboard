@@ -362,6 +362,7 @@
     <div class="hub-icons">
       <div class="icon-btn" id="btnHistory" title="對局紀錄">☰</div>
       <div class="icon-btn" id="btnSettings" title="設定">⚙</div>
+      <div class="icon-btn" id="btnFullscreen" title="全螢幕">⛶</div>
     </div>
   </div>
 </div>
@@ -701,7 +702,6 @@
           state = Object.assign(defaultState(), val);
           render();
         } else {
-          // room is empty — seed it with this device's current state
           fbRef.set(state).catch(e=>console.error('seed failed', e));
         }
         renderFbStatus();
@@ -790,7 +790,7 @@
       cardWrap.classList.toggle('is-dealer', isDealer);
       const scoreClass = state.scores[i] < 0 ? 'score negative' : 'score';
       const scoreStr = fmt(state.scores[i]);
-      const len = scoreStr.length; // digits + commas + minus sign
+      const len = scoreStr.length;
       let scoreFontStyle = '';
       if(len >= 9) scoreFontStyle = 'style="font-size:clamp(16px, 3.6vw, 24px);"';
       else if(len >= 8) scoreFontStyle = 'style="font-size:clamp(18px, 4.2vw, 28px);"';
@@ -814,7 +814,6 @@
   function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 
   function flashDelta(seatIdx, amount){
-    // small transient badge shown on the card
     const cardWrap = document.querySelector(`.card[data-seat="${seatIdx}"]`);
     const badge = document.createElement('div');
     badge.className = 'delta ' + (amount>=0?'plus':'minus');
@@ -824,9 +823,43 @@
     setTimeout(()=>{ badge.remove(); }, 1800);
   }
 
+  // ---------- fullscreen ----------
+  function isFullscreen(){
+    return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+  }
+  function fullscreenSupported(){
+    const el = document.documentElement;
+    return !!(el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen);
+  }
+  function toggleFullscreen(){
+    if(!isFullscreen()){
+      const el = document.documentElement;
+      const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+      if(req){
+        Promise.resolve(req.call(el)).catch(()=>{
+          alert('這個瀏覽器不支援網頁全螢幕。iPhone 的 Safari 目前不支援此功能，可以改用「分享 → 加入主畫面」，開啟後網址列會消失，效果接近全螢幕。');
+        });
+      }
+    } else {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+      if(exit) exit.call(document);
+    }
+  }
+  function updateFullscreenIcon(){
+    const btn = document.getElementById('btnFullscreen');
+    if(!btn) return;
+    if(isFullscreen()){
+      btn.textContent = '⤢';
+      btn.title = '離開全螢幕';
+    } else {
+      btn.textContent = '⛶';
+      btn.title = '全螢幕';
+    }
+  }
+
   // ---------- Win modal ----------
   function openWinModal(){
-    ui = { resultType:'tsumo', winner:0, loser:null, han:1, fu:30, yakuman:0, activeYakuman:{}, activeChips:{}, tenpai:{}, dora:0, uradora:0,akadora:0, menzen:true, fuPair:0, fuWait:0, fuMelds:{} };
+    ui = { resultType:'tsumo', winner:0, loser:null, han:1, fu:30, yakuman:0, activeYakuman:{}, activeChips:{}, tenpai:{}, dora:0, uradora:0, akadora:0, menzen:true, fuPair:0, fuWait:0, fuMelds:{} };
     buildWinnerSeg();
     buildLoserSeg();
     buildYakuChips();
@@ -909,10 +942,9 @@
       if(y.menzenOnly && !ui.menzen){ ui.activeChips[y.k]=false; return; }
       sum += (!ui.menzen && y.hanOpen!==undefined) ? y.hanOpen : y.han;
     });
-    sum += (ui.dora||0) + (ui.uradora||0)+ (ui.akadora||0);
+    sum += (ui.dora||0) + (ui.uradora||0) + (ui.akadora||0);
     ui.han = sum;
     document.getElementById('hanVal').textContent = ui.han;
-    // pinfu tsumo defaults to 20 fu automatically if nothing manually changed much
   }
 
   function buildYakumanChips(){
@@ -1008,7 +1040,7 @@
       points = isDealer ? table.dealerRon : table.nonRon;
       points += state.honba*300;
       splitText = `${state.players[ui.loser]} 支付 ${fmt(points)} 點` + (state.riichiSticks>0?` ＋ 供託 ${state.riichiSticks*1000} 點`:'');
-    } else { // tsumo
+    } else {
       if(isDealer){
         const each = table.dealerTsumoEach + state.honba*100;
         points = each*3;
@@ -1039,7 +1071,6 @@
     document.getElementById('drawSplitOut').textContent = text;
   }
 
-  // ---------- apply result ----------
   function nextRound(dealerContinues){
     if(dealerContinues){
       state.honba += 1;
@@ -1052,11 +1083,10 @@
           state.roundNumber = 1;
           state.roundWind += 1;
           if(state.gameLen==='tonpuu' && state.roundWind>=1){
-            // tonpuu ends after East round; keep looping East for simplicity if user continues
             state.roundWind = 0;
           }
           if(state.gameLen==='hanchan' && state.roundWind>=2){
-            state.roundWind = 0; // loop back to East after South if they keep playing
+            state.roundWind = 0;
           }
         }
       }
@@ -1138,10 +1168,8 @@
     closeWinModal();
   }
 
-  // ---------- riichi declare (tap wind chip area long-press alt: use card double tap) ----------
   function toggleRiichi(seatIdx){
     if(state.riichiActive[seatIdx]){
-      // allow un-declare only as a quick fix
       state.riichiActive[seatIdx] = false;
       state.scores[seatIdx] += 1000;
       state.riichiSticks = Math.max(0, state.riichiSticks-1);
@@ -1155,7 +1183,6 @@
     saveState();
   }
 
-  // ---------- history modal ----------
   function renderHistory(){
     const list = document.getElementById('historyList');
     if(!state.history.length){ list.innerHTML = '<div class="empty">尚無對局紀錄</div>'; return; }
@@ -1167,7 +1194,6 @@
     `).join('');
   }
 
-  // ---------- sheet sync ----------
   function renderSheetStatus(){
     const dot = document.getElementById('sheetStatusDot');
     const text = document.getElementById('sheetStatusText');
@@ -1199,7 +1225,6 @@
     }catch(e){ console.error('sheet sync failed', e); }
   }
 
-  // ---------- settings modal ----------
   function openSettings(){
     const wrap = document.getElementById('nameEditList');
     wrap.innerHTML = '';
@@ -1239,7 +1264,6 @@
     .setMimeType(ContentService.MimeType.JSON);
 }`;
 
-  // ---------- events ----------
   function bindEvents(){
     document.querySelectorAll('.card').forEach(card=>{
       let pressTimer=null;
@@ -1258,6 +1282,15 @@
     });
     document.getElementById('btnHistory').addEventListener('click', (e)=>{ e.stopPropagation(); document.getElementById('overlayHistory').classList.add('open'); });
     document.getElementById('btnSettings').addEventListener('click', (e)=>{ e.stopPropagation(); openSettings(); });
+    document.getElementById('btnFullscreen').addEventListener('click', (e)=>{ e.stopPropagation(); toggleFullscreen(); });
+
+    if(!fullscreenSupported()){
+      document.getElementById('btnFullscreen').style.display = 'none';
+    }
+    ['fullscreenchange','webkitfullscreenchange','mozfullscreenchange','MSFullscreenChange'].forEach(evt=>{
+      document.addEventListener(evt, updateFullscreenIcon);
+    });
+    updateFullscreenIcon();
 
     document.getElementById('closeWin').onclick = closeWinModal;
     document.getElementById('closeHistory').onclick = ()=> document.getElementById('overlayHistory').classList.remove('open');
@@ -1346,7 +1379,8 @@
     document.getElementById('displayOnlyToggle').addEventListener('change', async (e)=>{
       deviceSettings.displayOnly = e.target.checked;
       await saveDeviceSettings();
-    });    document.getElementById('testSync').onclick = async ()=>{
+    });
+    document.getElementById('testSync').onclick = async ()=>{
       if(!state.sheetUrl){ alert('請先貼上 Apps Script 網頁應用程式網址'); return; }
       await syncToSheet({ time:new Date().toISOString(), round:'測試', honba:0, type:'連線測試', detail:'這是一筆測試紀錄' });
       alert('已送出測試紀錄，請到你的 Google Sheet 確認是否新增了一列。');
@@ -1369,7 +1403,6 @@
       document.getElementById('overlaySettings').classList.remove('open');
     };
 
-    // close overlay on backdrop click
     document.querySelectorAll('.overlay').forEach(o=>{
       o.addEventListener('click',(e)=>{ if(e.target===o) o.classList.remove('open'); });
     });
