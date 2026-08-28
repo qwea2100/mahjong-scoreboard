@@ -1,0 +1,1410 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>樂樂 — 麻將記分板</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --felt-1:#0c4030;
+    --felt-2:#062b20;
+    --ivory:#f4efe0;
+    --ivory-dim:#e7dfc8;
+    --ink:#211c14;
+    --ink-soft:#5b5548;
+    --gold:#c9a24a;
+    --gold-dim:#8f7735;
+    --red:#b23b2e;
+    --red-dim:#7c281f;
+    --line: rgba(244,239,224,0.14);
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(120% 140% at 50% 50%, var(--felt-1) 0%, var(--felt-2) 72%, #041a13 100%);
+    font-family:'Zen Kaku Gothic New', sans-serif;
+    color:var(--ivory);
+    overflow:hidden;
+    -webkit-user-select:none;
+    user-select:none;
+    touch-action:manipulation;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    height:100vh;
+    width:100vw;
+  }
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 2px, transparent 2px, transparent 6px);
+    pointer-events:none;
+    z-index:0;
+  }
+  .table{
+    position:relative;
+    width:min(100vw, 100vh);
+    height:min(100vw, 100vh);
+    display:grid;
+    grid-template-columns: 1fr 46% 1fr;
+    grid-template-rows: 1fr 46% 1fr;
+    place-items:center;
+    z-index:1;
+    flex-shrink:0;
+  }
+  .seat{
+    width:100%; height:100%;
+    display:flex; align-items:center; justify-content:center;
+    position:relative;
+  }
+  .seat-bottom{ grid-column:2; grid-row:3; }
+  .seat-right { grid-column:3; grid-row:2; }
+  .seat-top   { grid-column:2; grid-row:1; }
+  .seat-left  { grid-column:1; grid-row:2; }
+
+  .seat-bottom .card{ transform: rotate(0deg); }
+  .seat-right  .card{ transform: rotate(270deg); }
+  .seat-top    .card{ transform: rotate(180deg); }
+  .seat-left   .card{ transform: rotate(90deg); }
+
+  .card{
+    width:min(42vw, 36vh, 380px);
+    background: linear-gradient(180deg, var(--ivory) 0%, var(--ivory-dim) 100%);
+    color:var(--ink);
+    border-radius:14px;
+    padding:14px 12px 16px;
+    box-shadow: 0 8px 22px rgba(0,0,0,0.38), inset 0 0 0 1px rgba(255,255,255,0.5);
+    position:relative;
+    cursor:pointer;
+    transition: transform .15s ease, box-shadow .15s ease;
+    border: 2px solid transparent;
+  }
+  .card:active{ transform-origin:center; filter:brightness(0.97); }
+  .card.is-dealer{
+    border-color: var(--gold);
+    box-shadow: 0 8px 22px rgba(0,0,0,0.4), 0 0 0 3px rgba(201,162,74,0.25), inset 0 0 0 1px rgba(255,255,255,0.6);
+  }
+  .card-top-row{
+    display:flex; align-items:baseline; justify-content:space-between; gap:8px;
+  }
+  .name{
+    font-weight:700; font-size:15px; letter-spacing:.02em;
+    max-width:65%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .meta{ display:flex; align-items:center; gap:6px; }
+  .wind-chip{
+    font-family:'Shippori Mincho', serif;
+    font-size:13px; font-weight:700;
+    color: var(--ink-soft);
+    background: rgba(33,28,20,0.06);
+    border-radius:6px; padding:2px 6px;
+  }
+  .dealer-chip{
+    font-family:'Shippori Mincho', serif;
+    font-size:12px; font-weight:800;
+    color:#fff; background: var(--red);
+    border-radius:6px; padding:2px 7px;
+    letter-spacing:.05em;
+  }
+  .riichi-label{
+    display:none;
+    font-family:'Shippori Mincho', serif;
+    font-size:13px; font-weight:800;
+    color:#fff; background: var(--red);
+    border-radius:6px; padding:2px 8px;
+    letter-spacing:.15em;
+    margin-top:4px;
+    width:fit-content;
+  }
+  .riichi-label.on{ display:inline-block; }
+  .score{
+    font-family:'Shippori Mincho', serif;
+    font-weight:800;
+    font-size: clamp(24px, 5.6vw, 40px);
+    line-height:1.05;
+    margin-top:2px;
+    letter-spacing:0em;
+    font-variant-numeric: tabular-nums;
+    white-space:nowrap;
+  }
+  .score.negative{ color: var(--red-dim); }
+  .delta{
+    position:absolute; top:-10px; right:14px;
+    font-family:'Shippori Mincho', serif;
+    font-weight:700; font-size:14px;
+    padding:2px 8px; border-radius:10px;
+    opacity:0; transform:translateY(4px);
+    transition: opacity .25s ease, transform .25s ease;
+    pointer-events:none;
+  }
+  .delta.show{ opacity:1; transform:translateY(0); }
+  .delta.plus{ background:#1f6b3f; color:#eafff0; }
+  .delta.minus{ background:var(--red); color:#fff2ef; }
+
+  /* Center hub */
+  .hub{
+    grid-column:2; grid-row:2;
+    width:100%; height:100%;
+    border-radius:50%;
+    background: radial-gradient(circle at 50% 40%, #123a2b 0%, #0a2a1f 65%, #071f17 100%);
+    box-shadow: inset 0 0 0 2px rgba(201,162,74,0.35), inset 0 0 30px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,0,0,0.4);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:6px;
+    cursor:pointer;
+    position:relative;
+  }
+  .hub-round{
+    font-family:'Shippori Mincho', serif;
+    font-size: clamp(30px, 4.6vh, 48px);
+    font-weight:800;
+    color:var(--gold);
+    letter-spacing:.06em;
+  }
+  .hub-sub{
+    font-size: clamp(15px, 2vh, 19px); color:rgba(244,239,224,0.75); letter-spacing:.08em;
+  }
+  .hub-sticks{
+    display:flex; align-items:center; gap:5px; margin-top:4px;
+    font-size: clamp(15px, 2vh, 19px); color:var(--ivory);
+  }
+  .hub-sticks .n{ font-weight:700; color:var(--gold); font-size:1.15em; }
+  .hub-cta{
+    margin-top:10px;
+    font-size: clamp(14px, 1.9vh, 17px);
+    padding:9px 20px;
+    border-radius:999px;
+    background: var(--gold);
+    color:#241c08;
+    font-weight:700;
+    letter-spacing:.03em;
+    box-shadow:0 3px 10px rgba(0,0,0,0.3);
+  }
+  .hub-icons{
+    position:absolute; bottom:10px; display:flex; gap:14px;
+  }
+  .icon-btn{
+    width:36px;height:36px;border-radius:50%;
+    background:rgba(244,239,224,0.08);
+    display:flex;align-items:center;justify-content:center;
+    font-size:17px; color:var(--ivory);
+    border: 1px solid rgba(244,239,224,0.18);
+  }
+  .icon-btn:active{ background:rgba(244,239,224,0.18); }
+
+  /* Modal */
+  .overlay{
+    position:fixed; inset:0; background:rgba(4,15,11,0.72);
+    backdrop-filter: blur(2px);
+    display:none; align-items:center; justify-content:center;
+    z-index:50; padding:16px;
+  }
+  .overlay.open{ display:flex; }
+  .modal{
+    width:100%; max-width:520px; max-height:88vh; overflow-y:auto;
+    background: var(--ivory); color:var(--ink);
+    border-radius:16px; padding:20px 20px 18px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  .modal h2{
+    font-family:'Shippori Mincho', serif;
+    margin:0 0 14px; font-size:20px; display:flex; align-items:center; justify-content:space-between;
+  }
+  .modal h2 .x{ font-size:15px; color:var(--ink-soft); cursor:pointer; padding:4px 8px; }
+  .field-label{
+    font-size:12px; font-weight:700; color:var(--ink-soft); letter-spacing:.04em;
+    margin:14px 0 6px; text-transform:uppercase;
+  }
+  .field-label:first-of-type{ margin-top:0; }
+  .seg{
+    display:flex; gap:8px; flex-wrap:wrap;
+  }
+  .seg button{
+    flex:1 1 auto;
+    padding:9px 12px;
+    border-radius:10px;
+    border: 1.5px solid rgba(33,28,20,0.15);
+    background:#fff;
+    color:var(--ink);
+    font-family:inherit; font-size:14px; font-weight:600;
+    cursor:pointer;
+  }
+  .seg button.active{
+    background: var(--felt-1); color:#fff; border-color:var(--felt-1);
+  }
+  .chip-grid{
+    display:flex; flex-wrap:wrap; gap:8px;
+  }
+  .chip{
+    padding:8px 12px; border-radius:999px;
+    border:1.5px solid rgba(33,28,20,0.18);
+    background:#fff; font-size:13px; font-weight:600; color:var(--ink);
+    cursor:pointer;
+  }
+  .chip.active{ background: var(--gold); border-color:var(--gold-dim); color:#241c08; }
+  .chip.disabled{ opacity:0.35; cursor:not-allowed; text-decoration:line-through; }
+  .fu-meld-grid{
+    display:grid; grid-template-columns:1fr 1fr; gap:8px;
+  }
+  .fu-meld-item{
+    display:flex; align-items:center; justify-content:space-between; gap:6px;
+    background:#fff; border:1.5px solid rgba(33,28,20,0.15); border-radius:10px;
+    padding:6px 8px;
+  }
+  .fu-meld-item .lbl{ font-size:12px; line-height:1.35; }
+  .fu-meld-item .lbl .sub{ display:block; color:var(--ink-soft); font-size:10.5px; }
+  .stepper.sm{ padding:3px 5px; gap:5px; }
+  .stepper.sm button{ width:22px; height:22px; border-radius:6px; font-size:13px; }
+  .stepper.sm .val{ min-width:16px; font-size:13px; }
+  .fu-calc-details{
+    margin-top:14px;
+    border:1.5px solid rgba(33,28,20,0.16);
+    border-radius:12px;
+    background:#fff;
+    overflow:hidden;
+  }
+  .fu-calc-summary{
+    list-style:none; cursor:pointer; padding:12px 14px;
+    display:flex; align-items:center; justify-content:space-between;
+    font-size:12px; font-weight:700; color:var(--ink-soft);
+    letter-spacing:.04em; text-transform:uppercase;
+  }
+  .fu-calc-summary::-webkit-details-marker{ display:none; }
+  .fu-calc-badge{
+    font-family:'Shippori Mincho', serif; font-weight:800; color:var(--red-dim);
+    text-transform:none; letter-spacing:0; margin-left:8px; font-size:14px;
+  }
+  .fu-calc-arrow{ transition: transform .15s ease; color:var(--ink-soft); }
+  .fu-calc-details[open] .fu-calc-arrow{ transform:rotate(180deg); }
+  .fu-calc-body{ padding:0 14px 14px; }
+  .stepper-row{
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  }
+  .stepper{
+    display:flex; align-items:center; gap:10px;
+    background:#fff; border-radius:12px; padding:6px 10px;
+    border:1.5px solid rgba(33,28,20,0.15);
+  }
+  .stepper button{
+    width:30px;height:30px;border-radius:8px;border:none;
+    background: var(--felt-1); color:#fff; font-size:17px; font-weight:700;
+    cursor:pointer;
+  }
+  .stepper .val{
+    min-width:48px; text-align:center; font-family:'Shippori Mincho',serif; font-weight:800; font-size:18px;
+    white-space:nowrap;
+  }
+  .result-box{
+    margin-top:16px; padding:14px 16px; border-radius:12px;
+    background: linear-gradient(180deg,#fff, #f6f2e6);
+    border: 1.5px solid rgba(201,162,74,0.5);
+  }
+  .result-box .label{ font-size:11px; color:var(--ink-soft); letter-spacing:.06em; text-transform:uppercase; }
+  .result-box .points{ font-family:'Shippori Mincho', serif; font-weight:800; font-size:26px; margin:2px 0 8px; color:var(--red-dim); }
+  .result-box .split{ font-size:13px; color:var(--ink-soft); line-height:1.6; }
+  .primary-btn{
+    width:100%; margin-top:16px; padding:13px; border:none; border-radius:12px;
+    background: var(--red); color:#fff; font-weight:700; font-size:15px;
+    font-family:inherit; cursor:pointer;
+  }
+  .primary-btn:disabled{ background:#bdb9a9; color:#7a7768; }
+  .ghost-btn{
+    width:100%; margin-top:8px; padding:11px; border-radius:12px;
+    background:transparent; border:1.5px solid rgba(33,28,20,0.2); color:var(--ink);
+    font-family:inherit; font-size:14px; font-weight:600; cursor:pointer;
+  }
+  .input-row{ display:flex; gap:10px; }
+  .input-row input{
+    flex:1; padding:10px 12px; border-radius:10px; border:1.5px solid rgba(33,28,20,0.15);
+    font-family:inherit; font-size:14px;
+  }
+  .settings-p{ font-size:13px; color:var(--ink-soft); line-height:1.7; margin:6px 0 0; }
+  textarea.code{
+    width:100%; min-height:150px; margin-top:8px; padding:10px; border-radius:10px;
+    border:1.5px solid rgba(33,28,20,0.15); font-family:ui-monospace,monospace; font-size:11.5px;
+    color:#333; background:#fbfaf5; resize:vertical;
+  }
+  .status-line{ font-size:12px; margin-top:8px; color:var(--ink-soft); display:flex; align-items:center; gap:6px;}
+  .dot-status{ width:7px;height:7px;border-radius:50%; background:#999; }
+  .dot-status.ok{ background:#2e8b57; }
+  .dot-status.err{ background:var(--red); }
+  .history-item{
+    padding:10px 0; border-bottom:1px solid rgba(33,28,20,0.1); font-size:13px;
+  }
+  .history-item .t1{ font-weight:700; }
+  .history-item .t2{ color:var(--ink-soft); font-size:12px; margin-top:2px; }
+  .empty{ text-align:center; color:var(--ink-soft); font-size:13px; padding:20px 0; }
+  .name-edit-row{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .name-edit-row input{ flex:1; padding:9px 10px; border-radius:9px; border:1.5px solid rgba(33,28,20,0.15); font-family:inherit; }
+  .name-edit-row .tag{ width:34px; text-align:center; font-family:'Shippori Mincho',serif; font-weight:800; color:var(--gold-dim); }
+  @media (max-width:520px){
+    .table{ grid-template-columns: 0.5fr 62% 0.5fr; grid-template-rows: 0.5fr 62% 0.5fr; }
+    .card{ width:min(64vw, 46vh, 340px); padding:11px 10px 13px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="table" id="tableEl">
+  <div class="seat seat-bottom"><div class="card" data-seat="0"><div id="card0"></div></div></div>
+  <div class="seat seat-right"><div class="card" data-seat="1"><div id="card1"></div></div></div>
+  <div class="seat seat-top"><div class="card" data-seat="2"><div id="card2"></div></div></div>
+  <div class="seat seat-left"><div class="card" data-seat="3"><div id="card3"></div></div></div>
+
+  <div class="hub" id="hubBtn">
+    <div class="hub-round" id="hubRound">東1局</div>
+    <div class="hub-sub" id="hubHonba">0本場</div>
+    <div class="hub-sticks">供託 <span class="n" id="hubSticks">0</span> 本</div>
+    <div class="hub-cta">開始計算 →</div>
+    <div class="hub-icons">
+      <div class="icon-btn" id="btnHistory" title="對局紀錄">☰</div>
+      <div class="icon-btn" id="btnSettings" title="設定">⚙</div>
+    </div>
+  </div>
+</div>
+
+<!-- WIN / DRAW ENTRY MODAL -->
+<div class="overlay" id="overlayWin">
+  <div class="modal">
+    <h2>結算本局 <span class="x" id="closeWin">✕ 關閉</span></h2>
+
+    <div class="field-label">結果類型</div>
+    <div class="seg" id="resultTypeSeg">
+      <button data-v="tsumo" class="active">自摸</button>
+      <button data-v="ron">榮和</button>
+      <button data-v="draw">流局</button>
+    </div>
+
+    <div id="winFields">
+      <div class="field-label">和了者</div>
+      <div class="seg" id="winnerSeg"></div>
+
+      <div class="field-label" id="loserLabel" style="display:none;">放銃者</div>
+      <div class="seg" id="loserSeg" style="display:none;"></div>
+
+      <div class="field-label">手牌型態</div>
+      <div class="seg" id="menzenSeg">
+        <button data-v="closed" class="active">門清</button>
+        <button data-v="open">有副露</button>
+      </div>
+
+      <div class="field-label">飜數快選</div>
+      <div class="chip-grid" id="yakuChips"></div>
+
+      <div class="field-label">寶牌 / 裏寶牌 / 赤寶牌</div>
+      <div class="stepper-row">
+        <div class="stepper">
+          <button data-d="-1" data-t="dora">－</button>
+          <div class="val" id="doraVal">0</div>
+          <button data-d="1" data-t="dora">＋</button>
+        </div>
+        <span style="font-size:13px;color:var(--ink-soft);">寶牌</span>
+        <div class="stepper">
+          <button data-d="-1" data-t="uradora">－</button>
+          <div class="val" id="uradoraVal">0</div>
+          <button data-d="1" data-t="uradora">＋</button>
+        </div>
+        <span style="font-size:13px;color:var(--ink-soft);">裏寶牌</span>
+        <div class="stepper">
+          <button data-d="-1" data-t="akadora">－</button>
+          <div class="val" id="akadoraVal">0</div>
+          <button data-d="1" data-t="akadora">＋</button>
+        </div>
+        <span style="font-size:13px;color:var(--ink-soft);">赤寶牌</span>
+      </div>
+
+      <details class="fu-calc-details" id="fuCalcDetails">
+        <summary class="fu-calc-summary">
+          <span>符數試算<span class="fu-calc-badge" id="fuCalcBadge"></span></span>
+          <span class="fu-calc-arrow">▾</span>
+        </summary>
+        <div class="fu-calc-body">
+          <div class="field-label" style="margin-top:10px;">雀頭</div>
+          <div class="seg" id="fuPairSeg">
+            <button data-k="normal" data-fu="0" class="active">一般對子</button>
+            <button data-k="yakuhai" data-fu="2">役牌對子</button>
+            <button data-k="double" data-fu="4">連風對子(自風=場風)</button>
+          </div>
+
+          <div class="field-label">聽牌型態</div>
+          <div class="seg" id="fuWaitSeg">
+            <button data-k="ryanmen" data-fu="0" class="active">兩面</button>
+            <button data-k="kanchan" data-fu="2">嵌張</button>
+            <button data-k="penchan" data-fu="2">邊張</button>
+            <button data-k="tanki" data-fu="2">單騎</button>
+            <button data-k="shanpon" data-fu="0">雙碰</button>
+          </div>
+
+          <div class="field-label">面子加符</div>
+          <div class="fu-meld-grid" id="fuMeldGrid"></div>
+          <p class="settings-p" style="margin-top:6px;">副底 20 符、門清榮和 +10、自摸 +2</p>
+        </div>
+      </details>
+
+      <div class="field-label">飜數 / 符數</div>
+      <div class="stepper-row">
+        <div class="stepper">
+          <button data-d="-1" data-t="han">－</button>
+          <div class="val" id="hanVal">0</div>
+          <button data-d="1" data-t="han">＋</button>
+        </div>
+        <span style="font-size:13px;color:var(--ink-soft);">飜</span>
+        <div class="stepper">
+          <button data-d="-10" data-t="fu">－</button>
+          <div class="val" id="fuVal">30</div>
+          <button data-d="10" data-t="fu">＋</button>
+        </div>
+        <span style="font-size:13px;color:var(--ink-soft);">符</span>
+      </div>
+
+      <div class="field-label">役滿(可複選疊加，自動加總倍數)</div>
+      <div class="chip-grid" id="yakumanChips"></div>
+
+      <div class="result-box">
+        <div class="label">應得點數</div>
+        <div class="points" id="pointsOut">—</div>
+        <div class="split" id="splitOut"></div>
+      </div>
+    </div>
+
+    <div id="drawFields" style="display:none;">
+      <div class="field-label">聽牌玩家(可複選)</div>
+      <div class="chip-grid" id="tenpaiChips"></div>
+      <div class="result-box">
+        <div class="label">流局收支</div>
+        <div class="split" id="drawSplitOut">請選擇聽牌玩家</div>
+      </div>
+    </div>
+
+    <button class="primary-btn" id="applyBtn">套用結果並進下一局</button>
+  </div>
+</div>
+
+<!-- HISTORY MODAL -->
+<div class="overlay" id="overlayHistory">
+  <div class="modal">
+    <h2>對局紀錄 <span class="x" id="closeHistory">✕ 關閉</span></h2>
+    <div id="historyList"></div>
+    <button class="ghost-btn" id="undoLast">復原上一局</button>
+  </div>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div class="overlay" id="overlaySettings">
+  <div class="modal">
+    <h2>設定 <span class="x" id="closeSettings">✕ 關閉</span></h2>
+
+    <div class="field-label">玩家名稱與起始座位</div>
+    <div id="nameEditList"></div>
+
+    <div class="field-label">起始點數</div>
+    <div class="input-row">
+      <input type="number" id="startPointsInput" value="25000">
+      <button class="ghost-btn" style="width:auto;margin:0;padding:9px 16px;" id="applyStartPoints">套用</button>
+    </div>
+
+    <div class="field-label">賽制</div>
+    <div class="seg" id="gameLenSeg">
+      <button data-v="hanchan" class="active">半莊(東南)</button>
+      <button data-v="tonpuu">東風</button>
+    </div>
+
+    <div class="field-label">多裝置即時同步(手機操作 → 平板顯示)</div>
+    <p class="settings-p">
+      免費申請一個 Firebase 專案並開啟 Realtime Database，把設定貼在下面，兩台裝置打開同一頁面、輸入同一組「房間代碼」，分數就會即時互相同步。
+      步驟：<br>
+      1. 到 <b>console.firebase.google.com</b> 建立專案<br>
+      2. 左側選單「Build → Realtime Database」→「建立資料庫」，位置隨意，先選「測試模式」<br>
+      3. 進「規則」分頁，貼上 <code>{"rules":{".read":true,".write":true}}</code> 並發布(方便同步，但代表任何人拿到房間代碼都能讀寫，僅建議用在朋友間記分)<br>
+      4. 左側「專案總覽」旁齒輪 →「專案設定」→ 最下面「你的應用程式」→ 新增網頁應用程式，複製「SDK 設定和設定」裡的 <code>firebaseConfig</code> 物件，整段貼到下面欄位(不用改格式，直接貼)
+    </p>
+    <div class="field-label" style="margin-top:10px;">Firebase 設定(貼上 firebaseConfig)</div>
+    <textarea class="code" id="firebaseConfigInput" placeholder='{
+  apiKey: "...",
+  authDomain: "...",
+  databaseURL: "...",
+  projectId: "...",
+  ...
+}'></textarea>
+    <div class="field-label">房間代碼</div>
+    <div class="input-row">
+      <input type="text" id="roomCodeInput" placeholder="例如 table1，兩台裝置需輸入相同代碼">
+      <button class="ghost-btn" style="width:auto;margin:0;padding:9px 16px;" id="applyFirebase">連線</button>
+    </div>
+    <div class="status-line"><span class="dot-status" id="fbStatusDot"></span><span id="fbStatusText">尚未設定</span></div>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:var(--ink-soft);">
+      <input type="checkbox" id="displayOnlyToggle" style="width:16px;height:16px;">
+      這台裝置設為「純顯示」模式(點卡片/中央圓盤不會開啟操作面板，避免平板被誤觸)
+    </label>
+
+    <div class="field-label">Google Sheet 即時同步(選用，寫入歷史紀錄)</div>
+    <p class="settings-p">
+      請先在你的 Google Sheet 中，透過「擴充功能 → Apps Script」貼上下方程式碼並部署為「網頁應用程式」(存取權限選「所有人」)，把取得的網址貼在下面。之後每局結算都會自動送出一筆紀錄。
+    </p>
+    <div class="input-row">
+      <input type="text" id="sheetUrlInput" placeholder="貼上 Apps Script 網頁應用程式網址">
+    </div>
+    <div class="status-line"><span class="dot-status" id="sheetStatusDot"></span><span id="sheetStatusText">尚未設定同步網址</span></div>
+    <button class="ghost-btn" id="testSync">測試同步</button>
+    <button class="ghost-btn" id="copyScript">複製 Apps Script 程式碼</button>
+    <textarea class="code" readonly id="scriptCode"></textarea>
+
+    <div class="field-label">重置</div>
+    <button class="ghost-btn" id="resetGame" style="color:var(--red);border-color:rgba(178,59,46,0.4);">重新開局(清空分數與紀錄)</button>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-database-compat.js"></script>
+<script>
+
+(function(){
+  const WIND = ['東','南','西','北'];
+  const SEAT_LABELS = ['A','B','C','D'];
+
+  const defaultState = () => ({
+    players: ['東家','南家','西家','北家'],
+    scores: [25000,25000,25000,25000],
+    startPoints: 25000,
+    dealerIndex: 0,
+    roundWind: 0,      // 0東 1南 2西 3北
+    roundNumber: 1,    // 1-4
+    honba: 0,
+    riichiSticks: 0,
+    riichiActive: [false,false,false,false],
+    gameLen: 'hanchan',
+    sheetUrl: '',
+    history: []
+  });
+
+  let state = null;
+  let ui = {
+    resultType: 'tsumo',
+    winner: 0,
+    loser: null,
+    han: 1,
+    fu: 30,
+    yakuman: 0,
+    activeChips: {},
+    tenpai: {}
+  };
+
+  const YAKU_CHIPS = [
+    {k:'riichi', label:'立直', han:1, menzenOnly:true},
+    {k:'ippatsu', label:'一發', han:1, menzenOnly:true},
+    {k:'tsumoyaku', label:'門前自摸', han:1, menzenOnly:true},
+    {k:'pinfu', label:'平和', han:1, menzenOnly:true},
+    {k:'tanyao', label:'斷幺九', han:1},
+    {k:'seatwind', label:'門風', han:1},
+    {k:'roundwind', label:'場風', han:1},
+    {k:'chun', label:'中', han:1},
+    {k:'hatsu', label:'發', han:1},
+    {k:'haku', label:'白', han:1},
+    {k:'sanshoku', label:'三色同順', han:2, hanOpen:1},
+    {k:'ittsuu', label:'一氣通貫', han:2, hanOpen:1},
+    {k:'toitoi', label:'對對和', han:2},
+    {k:'chiitoi', label:'七對子', han:2, menzenOnly:true},
+    {k:'ryanpeikou', label:'二盃口', han:3, menzenOnly:true},
+    {k:'sananko', label:'三暗刻', han:2},
+    {k:'sanshokudoukou', label:'三色同刻', han:2},
+    {k:'shousangen', label:'小三元', han:2},
+    {k:'honitsu', label:'混一色', han:3, hanOpen:2},
+    {k:'chinitsu', label:'清一色', han:6, hanOpen:5},
+    {k:'chanta', label:'混全帶幺九', han:2, hanOpen:1},
+    {k:'junchan', label:'純全帶幺九', han:3, hanOpen:2},
+  ];
+
+  const MELD_TYPES = [
+    {k:'openSimple',   label:'明刻', sub:'中張牌', fu:2},
+    {k:'openHonor',    label:'明刻', sub:'么九牌', fu:4},
+    {k:'closedSimple', label:'暗刻', sub:'中張牌', fu:4},
+    {k:'closedHonor',  label:'暗刻', sub:'么九牌', fu:8},
+    {k:'kanOpenSimple',   label:'明槓', sub:'中張牌', fu:8},
+    {k:'kanOpenHonor',    label:'明槓', sub:'么九牌', fu:16},
+    {k:'kanClosedSimple', label:'暗槓', sub:'中張牌', fu:16},
+    {k:'kanClosedHonor',  label:'暗槓', sub:'么九牌', fu:32},
+  ];
+
+  const YAKUMAN_CHIPS = [
+    {k:'kokushi', label:'國士無雙', mult:1},
+    {k:'kokushi13', label:'國士無雙十三面', mult:2},
+    {k:'suuanko', label:'四暗刻', mult:1},
+    {k:'suuankotanki', label:'四暗刻單騎', mult:2},
+    {k:'daisangen', label:'大三元', mult:1},
+    {k:'tsuuiisou', label:'字一色', mult:1},
+    {k:'ryuuiisou', label:'綠一色', mult:1},
+    {k:'chinroutou', label:'清老頭', mult:1},
+    {k:'shousuushii', label:'小四喜', mult:1},
+    {k:'daisuushii', label:'大四喜', mult:2},
+    {k:'chuurenpoutou', label:'九蓮寶燈', mult:1},
+    {k:'junseichuuren', label:'純正九蓮寶燈', mult:2},
+    {k:'suukantsu', label:'四槓子', mult:1},
+    {k:'tenhou', label:'天和', mult:1},
+    {k:'chiihou', label:'地和', mult:1},
+  ];
+
+  // ---------- storage ----------
+  let deviceSettings = { firebaseConfig: null, roomCode: '', displayOnly: false };
+  let fbRef = null;
+  let fbConnected = false;
+
+  async function loadDeviceSettings(){
+    try{
+      const r = await window.storage.get('mahjong-device-settings', false);
+      if(r && r.value){ return Object.assign({firebaseConfig:null, roomCode:'', displayOnly:false}, JSON.parse(r.value)); }
+    }catch(e){ /* not found */ }
+    return { firebaseConfig: null, roomCode: '', displayOnly: false };
+  }
+  async function saveDeviceSettings(){
+    try{ await window.storage.set('mahjong-device-settings', JSON.stringify(deviceSettings), false); }
+    catch(e){ console.error('device settings save failed', e); }
+  }
+
+  function parseLooseConfig(text){
+    if(!text || !text.trim()) return null;
+    let t = text.trim();
+    t = t.replace(/^\s*(const|let|var)\s+\w+\s*=\s*/,'');
+    t = t.replace(/;\s*$/,'');
+    try{ return JSON.parse(t); }catch(e){ /* try loose eval below */ }
+    try{ return Function('"use strict";return (' + t + ')')(); }
+    catch(e){ return null; }
+  }
+
+  function renderFbStatus(){
+    const dot = document.getElementById('fbStatusDot');
+    const text = document.getElementById('fbStatusText');
+    if(!dot) return;
+    if(!deviceSettings.firebaseConfig || !deviceSettings.roomCode){
+      dot.className='dot-status'; text.textContent='尚未設定';
+    } else if(fbConnected){
+      dot.className='dot-status ok'; text.textContent='已連線，房間代碼：' + deviceSettings.roomCode;
+    } else {
+      dot.className='dot-status err'; text.textContent='連線中或失敗，請確認設定與網路';
+    }
+  }
+
+  function initFirebase(){
+    if(!deviceSettings.firebaseConfig || !deviceSettings.roomCode) return;
+    try{
+      if(!window._fbApp){
+        window._fbApp = firebase.initializeApp(deviceSettings.firebaseConfig);
+      }
+      if(fbRef){ fbRef.off(); }
+      fbRef = firebase.database().ref('mahjong-rooms/' + deviceSettings.roomCode);
+      fbRef.on('value', (snap)=>{
+        const val = snap.val();
+        fbConnected = true;
+        if(val){
+          state = Object.assign(defaultState(), val);
+          render();
+        } else {
+          // room is empty — seed it with this device's current state
+          fbRef.set(state).catch(e=>console.error('seed failed', e));
+        }
+        renderFbStatus();
+      }, (err)=>{
+        console.error('firebase read error', err);
+        fbConnected = false;
+        renderFbStatus();
+      });
+    }catch(e){
+      console.error('firebase init failed', e);
+      fbConnected = false;
+      renderFbStatus();
+    }
+  }
+
+  async function loadState(){
+    try{
+      const r = await window.storage.get('mahjong-game-state', false);
+      if(r && r.value){ return Object.assign(defaultState(), JSON.parse(r.value)); }
+    }catch(e){ /* not found or error */ }
+    return defaultState();
+  }
+  async function saveState(){
+    try{ await window.storage.set('mahjong-game-state', JSON.stringify(state), false); }
+    catch(e){ console.error('storage save failed', e); }
+    if(fbRef){
+      try{ await fbRef.set(state); }
+      catch(e){ console.error('firebase write failed', e); }
+    }
+  }
+
+  // ---------- math ----------
+  function roundUp100(x){ return Math.ceil(x/100)*100; }
+
+  const FIXED = {
+    mangan:    {dealerRon:12000, dealerTsumoEach:4000, nonRon:8000,  nonTsumoNon:2000, nonTsumoDealer:4000},
+    haneman:   {dealerRon:18000, dealerTsumoEach:6000, nonRon:12000, nonTsumoNon:3000, nonTsumoDealer:6000},
+    baiman:    {dealerRon:24000, dealerTsumoEach:8000, nonRon:16000, nonTsumoNon:4000, nonTsumoDealer:8000},
+    sanbaiman: {dealerRon:36000, dealerTsumoEach:12000,nonRon:24000, nonTsumoNon:6000, nonTsumoDealer:12000},
+    yakuman:   {dealerRon:48000, dealerTsumoEach:16000,nonRon:32000, nonTsumoNon:8000, nonTsumoDealer:16000},
+  };
+
+  function computePoints(han, fu, isDealer, yakumanMult){
+    let table = null;
+    if(yakumanMult > 0){
+      const f = FIXED.yakuman;
+      table = {
+        dealerRon: f.dealerRon*yakumanMult, dealerTsumoEach: f.dealerTsumoEach*yakumanMult,
+        nonRon: f.nonRon*yakumanMult, nonTsumoNon: f.nonTsumoNon*yakumanMult, nonTsumoDealer: f.nonTsumoDealer*yakumanMult
+      };
+    } else if(han >= 5){
+      const key = han>=11?'sanbaiman':han>=8?'baiman':han>=6?'haneman':'mangan';
+      table = FIXED[key];
+    } else {
+      const base = fu * Math.pow(2, han+2);
+      if(base >= 2000){ table = FIXED.mangan; }
+      else{
+        table = {
+          dealerRon: roundUp100(base*6),
+          dealerTsumoEach: roundUp100(base*2),
+          nonRon: roundUp100(base*4),
+          nonTsumoNon: roundUp100(base*1),
+          nonTsumoDealer: roundUp100(base*2),
+        };
+      }
+    }
+    return table;
+  }
+
+  // ---------- rendering ----------
+  function fmt(n){ return n.toLocaleString('en-US'); }
+
+  function windOf(seatIdx){
+    return WIND[(seatIdx - state.dealerIndex + 4) % 4];
+  }
+
+  function render(){
+    document.getElementById('hubRound').textContent = WIND[state.roundWind] + state.roundNumber + '局';
+    document.getElementById('hubHonba').textContent = state.honba + '本場';
+    document.getElementById('hubSticks').textContent = state.riichiSticks;
+
+    for(let i=0;i<4;i++){
+      const el = document.getElementById('card'+i);
+      const cardWrap = el.parentElement;
+      const isDealer = (i === state.dealerIndex);
+      cardWrap.classList.toggle('is-dealer', isDealer);
+      const scoreClass = state.scores[i] < 0 ? 'score negative' : 'score';
+      const scoreStr = fmt(state.scores[i]);
+      const len = scoreStr.length; // digits + commas + minus sign
+      let scoreFontStyle = '';
+      if(len >= 9) scoreFontStyle = 'style="font-size:clamp(16px, 3.6vw, 24px);"';
+      else if(len >= 8) scoreFontStyle = 'style="font-size:clamp(18px, 4.2vw, 28px);"';
+      else if(len >= 7) scoreFontStyle = 'style="font-size:clamp(20px, 4.8vw, 32px);"';
+      el.innerHTML = `
+        <div class="card-top-row">
+          <div class="name">${escapeHtml(state.players[i])}</div>
+          <div class="meta">
+            ${isDealer?'<span class="dealer-chip">莊</span>':''}
+            <span class="wind-chip">${windOf(i)}</span>
+          </div>
+        </div>
+        <div class="${scoreClass}" ${scoreFontStyle}>${scoreStr}</div>
+        <div class="riichi-label ${state.riichiActive[i]?'on':''}">立直</div>
+      `;
+    }
+    renderHistory();
+    renderSheetStatus();
+  }
+
+  function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+  function flashDelta(seatIdx, amount){
+    // small transient badge shown on the card
+    const cardWrap = document.querySelector(`.card[data-seat="${seatIdx}"]`);
+    const badge = document.createElement('div');
+    badge.className = 'delta ' + (amount>=0?'plus':'minus');
+    badge.textContent = (amount>=0?'+':'') + fmt(amount);
+    cardWrap.appendChild(badge);
+    requestAnimationFrame(()=>badge.classList.add('show'));
+    setTimeout(()=>{ badge.remove(); }, 1800);
+  }
+
+  // ---------- Win modal ----------
+  function openWinModal(){
+    ui = { resultType:'tsumo', winner:0, loser:null, han:1, fu:30, yakuman:0, activeYakuman:{}, activeChips:{}, tenpai:{}, dora:0, uradora:0,akadora:0, menzen:true, fuPair:0, fuWait:0, fuMelds:{} };
+    buildWinnerSeg();
+    buildLoserSeg();
+    buildYakuChips();
+    buildYakumanChips();
+    buildTenpaiChips();
+    buildFuMeldGrid();
+    document.querySelectorAll('#resultTypeSeg button').forEach(b=>b.classList.toggle('active', b.dataset.v===ui.resultType));
+    document.querySelectorAll('#menzenSeg button').forEach(b=>b.classList.toggle('active', b.dataset.v==='closed'));
+    document.querySelectorAll('#fuPairSeg button').forEach(b=>b.classList.toggle('active', b.dataset.k==='normal'));
+    document.querySelectorAll('#fuWaitSeg button').forEach(b=>b.classList.toggle('active', b.dataset.k==='ryanmen'));
+    document.getElementById('hanVal').textContent = ui.han;
+    document.getElementById('doraVal').textContent = ui.dora;
+    document.getElementById('uradoraVal').textContent = ui.uradora;
+    document.getElementById('akadoraVal').textContent = ui.akadora;
+    toggleResultFields();
+    applyFuCalc();
+    recalc();
+    document.getElementById('overlayWin').classList.add('open');
+  }
+  function closeWinModal(){ document.getElementById('overlayWin').classList.remove('open'); }
+
+  function buildWinnerSeg(){
+    const seg = document.getElementById('winnerSeg');
+    seg.innerHTML = '';
+    state.players.forEach((name,i)=>{
+      const b = document.createElement('button');
+      b.textContent = name; b.dataset.i = i;
+      if(i===ui.winner) b.classList.add('active');
+      b.onclick = ()=>{ ui.winner=i; if(ui.loser===i) ui.loser=null; buildWinnerSeg(); buildLoserSeg(); recalc(); };
+      seg.appendChild(b);
+    });
+  }
+  function buildLoserSeg(){
+    const seg = document.getElementById('loserSeg');
+    const show = ui.resultType === 'ron';
+    document.getElementById('loserLabel').style.display = show?'block':'none';
+    seg.style.display = show?'flex':'none';
+    if(!show) return;
+    seg.innerHTML = '';
+    state.players.forEach((name,i)=>{
+      if(i===ui.winner) return;
+      const b = document.createElement('button');
+      b.textContent = name; b.dataset.i = i;
+      if(i===ui.loser) b.classList.add('active');
+      b.onclick = ()=>{ ui.loser=i; buildLoserSeg(); recalc(); };
+      seg.appendChild(b);
+    });
+    if(ui.loser===null){
+      const first = state.players.map((_,i)=>i).find(i=>i!==ui.winner);
+      ui.loser = first;
+      buildLoserSeg();
+    }
+  }
+  function buildYakuChips(){
+    const wrap = document.getElementById('yakuChips');
+    wrap.innerHTML = '';
+    YAKU_CHIPS.forEach(y=>{
+      const c = document.createElement('div');
+      const disabled = y.menzenOnly && !ui.menzen;
+      c.className = 'chip' + (disabled?' disabled':'');
+      c.textContent = y.label + (!ui.menzen && y.hanOpen!==undefined ? `(${y.hanOpen}翻)` : '');
+      if(disabled){
+        ui.activeChips[y.k] = false;
+      } else {
+        c.classList.toggle('active', !!ui.activeChips[y.k]);
+        c.onclick = ()=>{
+          ui.activeChips[y.k] = !ui.activeChips[y.k];
+          c.classList.toggle('active', !!ui.activeChips[y.k]);
+          recomputeHanFromChips();
+          applyFuCalc();
+        };
+      }
+      wrap.appendChild(c);
+    });
+  }
+  function recomputeHanFromChips(){
+    let sum = 0;
+    YAKU_CHIPS.forEach(y=>{
+      if(!ui.activeChips[y.k]) return;
+      if(y.menzenOnly && !ui.menzen){ ui.activeChips[y.k]=false; return; }
+      sum += (!ui.menzen && y.hanOpen!==undefined) ? y.hanOpen : y.han;
+    });
+    sum += (ui.dora||0) + (ui.uradora||0)+ (ui.akadora||0);
+    ui.han = sum;
+    document.getElementById('hanVal').textContent = ui.han;
+    // pinfu tsumo defaults to 20 fu automatically if nothing manually changed much
+  }
+
+  function buildYakumanChips(){
+    const wrap = document.getElementById('yakumanChips');
+    wrap.innerHTML = '';
+    YAKUMAN_CHIPS.forEach(y=>{
+      const c = document.createElement('div');
+      c.className = 'chip'; c.textContent = y.label + (y.mult>1?`(${y.mult}倍)`:'');
+      c.classList.toggle('active', !!ui.activeYakuman[y.k]);
+      c.onclick = ()=>{
+        ui.activeYakuman[y.k] = !ui.activeYakuman[y.k];
+        c.classList.toggle('active', !!ui.activeYakuman[y.k]);
+        recomputeYakuman();
+        recalc();
+      };
+      wrap.appendChild(c);
+    });
+  }
+  function recomputeYakuman(){
+    let sum = 0;
+    YAKUMAN_CHIPS.forEach(y=>{ if(ui.activeYakuman[y.k]) sum += y.mult; });
+    ui.yakuman = sum;
+  }
+
+  function buildFuMeldGrid(){
+    const wrap = document.getElementById('fuMeldGrid');
+    wrap.innerHTML = '';
+    MELD_TYPES.forEach(m=>{
+      ui.fuMelds[m.k] = 0;
+      const item = document.createElement('div');
+      item.className = 'fu-meld-item';
+      item.innerHTML = `<span class="lbl">${m.label}<span class="sub">${m.sub} · +${m.fu}/組</span></span>
+        <div class="stepper sm">
+          <button data-k="${m.k}" data-d="-1">－</button>
+          <div class="val" id="fuMeld_${m.k}">0</div>
+          <button data-k="${m.k}" data-d="1">＋</button>
+        </div>`;
+      wrap.appendChild(item);
+      item.querySelectorAll('button').forEach(btn=>{
+        btn.onclick = ()=>{
+          const k = btn.dataset.k;
+          const d = parseInt(btn.dataset.d,10);
+          ui.fuMelds[k] = Math.max(0, Math.min(4, (ui.fuMelds[k]||0)+d));
+          document.getElementById('fuMeld_'+k).textContent = ui.fuMelds[k];
+          applyFuCalc();
+        };
+      });
+    });
+  }
+
+  function applyFuCalc(){
+    if(ui.activeChips.chiitoi){
+      ui.fu = 25;
+    } else {
+      let fu = 20;
+      if(ui.menzen && ui.resultType==='ron') fu += 10;
+      if(ui.resultType==='tsumo' && !ui.activeChips.pinfu) fu += 2;
+      fu += (ui.fuPair||0);
+      fu += (ui.fuWait||0);
+      MELD_TYPES.forEach(m=> fu += (ui.fuMelds[m.k]||0) * m.fu);
+      fu = Math.max(20, Math.ceil(fu/10)*10);
+      ui.fu = fu;
+    }
+    document.getElementById('fuVal').textContent = ui.fu;
+    const badge = document.getElementById('fuCalcBadge');
+    if(badge) badge.textContent = '目前 ' + ui.fu + ' 符';
+    recalc();
+  }
+  function buildTenpaiChips(){
+    const wrap = document.getElementById('tenpaiChips');
+    wrap.innerHTML = '';
+    state.players.forEach((name,i)=>{
+      const c = document.createElement('div');
+      c.className = 'chip'; c.textContent = name;
+      c.onclick = ()=>{ ui.tenpai[i] = !ui.tenpai[i]; c.classList.toggle('active', !!ui.tenpai[i]); recalcDraw(); };
+      wrap.appendChild(c);
+    });
+  }
+
+  function toggleResultFields(){
+    const isDraw = ui.resultType === 'draw';
+    document.getElementById('winFields').style.display = isDraw?'none':'block';
+    document.getElementById('drawFields').style.display = isDraw?'block':'none';
+    buildLoserSeg();
+  }
+
+  function recalc(){
+    if(ui.resultType==='draw') return;
+    const isDealer = ui.winner === state.dealerIndex;
+    const table = computePoints(ui.han, ui.fu, isDealer, ui.yakuman);
+    let points, splitText;
+    if(ui.resultType==='ron'){
+      points = isDealer ? table.dealerRon : table.nonRon;
+      points += state.honba*300;
+      splitText = `${state.players[ui.loser]} 支付 ${fmt(points)} 點` + (state.riichiSticks>0?` ＋ 供託 ${state.riichiSticks*1000} 點`:'');
+    } else { // tsumo
+      if(isDealer){
+        const each = table.dealerTsumoEach + state.honba*100;
+        points = each*3;
+        splitText = `其餘三家各付 ${fmt(each)} 點`+ (state.riichiSticks>0?` ＋ 供託 ${state.riichiSticks*1000} 點`:'');
+      } else {
+        const eachNon = table.nonTsumoNon + state.honba*100;
+        const dealerPay = table.nonTsumoDealer + state.honba*100;
+        points = eachNon*2 + dealerPay;
+        splitText = `莊家付 ${fmt(dealerPay)} 點，其餘閒家各付 ${fmt(eachNon)} 點`+ (state.riichiSticks>0?` ＋ 供託 ${state.riichiSticks*1000} 點`:'');
+      }
+    }
+    document.getElementById('pointsOut').textContent = fmt(points) + ' 點';
+    document.getElementById('splitOut').textContent = splitText;
+    ui._computed = { points, isDealer };
+  }
+
+  function recalcDraw(){
+    const tenpaiList = state.players.map((_,i)=>i).filter(i=>ui.tenpai[i]);
+    const notenList = state.players.map((_,i)=>i).filter(i=>!ui.tenpai[i]);
+    let text;
+    if(tenpaiList.length===0 || tenpaiList.length===4){
+      text = '聽牌人數為 0 或 4 人，本局不進行點數交換。';
+    } else {
+      const totalMap = {1:[3000,1000],2:[1500,1500],3:[1000,3000]};
+      const [tGet, nPay] = totalMap[tenpaiList.length];
+      text = `聽牌者(${tenpaiList.map(i=>state.players[i]).join('、')})各得 ${fmt(tGet)} 點；未聽牌者(${notenList.map(i=>state.players[i]).join('、')})各付 ${fmt(nPay)} 點。`;
+    }
+    document.getElementById('drawSplitOut').textContent = text;
+  }
+
+  // ---------- apply result ----------
+  function nextRound(dealerContinues){
+    if(dealerContinues){
+      state.honba += 1;
+    } else {
+      state.honba = 0;
+      state.dealerIndex = (state.dealerIndex+1) % 4;
+      if(state.dealerIndex === 0){
+        state.roundNumber += 1;
+        if(state.roundNumber > 4){
+          state.roundNumber = 1;
+          state.roundWind += 1;
+          if(state.gameLen==='tonpuu' && state.roundWind>=1){
+            // tonpuu ends after East round; keep looping East for simplicity if user continues
+            state.roundWind = 0;
+          }
+          if(state.gameLen==='hanchan' && state.roundWind>=2){
+            state.roundWind = 0; // loop back to East after South if they keep playing
+          }
+        }
+      }
+    }
+    state.riichiActive = [false,false,false,false];
+  }
+
+  function pushHistory(entry){
+    state.history.unshift(entry);
+    if(state.history.length>60) state.history.pop();
+  }
+
+  async function applyResult(){
+    const before = state.scores.slice();
+    const prevSnapshot = {
+      scores: state.scores.slice(),
+      dealerIndex: state.dealerIndex,
+      roundWind: state.roundWind,
+      roundNumber: state.roundNumber,
+      honba: state.honba,
+      riichiSticks: state.riichiSticks,
+      riichiActive: state.riichiActive.slice(),
+    };
+    let entry = { time: new Date().toISOString(), round: WIND[state.roundWind]+state.roundNumber+'局', honba: state.honba, _prev: prevSnapshot };
+
+    if(ui.resultType==='draw'){
+      const tenpaiList = state.players.map((_,i)=>i).filter(i=>ui.tenpai[i]);
+      const notenList = state.players.map((_,i)=>i).filter(i=>!ui.tenpai[i]);
+      if(tenpaiList.length>0 && tenpaiList.length<4){
+        const totalMap = {1:[3000,1000],2:[1500,1500],3:[1000,3000]};
+        const [tGet, nPay] = totalMap[tenpaiList.length];
+        tenpaiList.forEach(i=> state.scores[i]+=tGet);
+        notenList.forEach(i=> state.scores[i]-=nPay);
+      }
+      const dealerTenpai = ui.tenpai[state.dealerIndex];
+      entry.type = '流局';
+      entry.detail = `聽牌: ${tenpaiList.map(i=>state.players[i]).join('、')||'無'}`;
+      pushHistory(entry);
+      nextRound(!!dealerTenpai);
+    } else {
+      const isDealer = ui.winner === state.dealerIndex;
+      const table = computePoints(ui.han, ui.fu, isDealer, ui.yakuman);
+      const sticksBonus = state.riichiSticks*1000;
+      const yakumanNames = YAKUMAN_CHIPS.filter(y=>ui.activeYakuman[y.k]).map(y=>y.label).join('、');
+      const hanFuLabel = ui.yakuman>0 ? yakumanNames : `${ui.han}飜${ui.fu}符`;
+      if(ui.resultType==='ron'){
+        const pts = (isDealer?table.dealerRon:table.nonRon) + state.honba*300;
+        state.scores[ui.loser] -= pts;
+        state.scores[ui.winner] += pts + sticksBonus;
+        entry.type='榮和'; entry.detail = `${state.players[ui.winner]} 榮和 ${state.players[ui.loser]} ${hanFuLabel} ${fmt(pts)}點`;
+      } else {
+        if(isDealer){
+          const each = table.dealerTsumoEach + state.honba*100;
+          [0,1,2,3].forEach(i=>{ if(i!==ui.winner) state.scores[i]-=each; });
+          state.scores[ui.winner] += each*3 + sticksBonus;
+          entry.type='自摸'; entry.detail = `${state.players[ui.winner]}(莊) 自摸 ${hanFuLabel} 各付${fmt(each)}點`;
+        } else {
+          const eachNon = table.nonTsumoNon + state.honba*100;
+          const dealerPay = table.nonTsumoDealer + state.honba*100;
+          [0,1,2,3].forEach(i=>{
+            if(i===ui.winner) return;
+            state.scores[i] -= (i===state.dealerIndex? dealerPay: eachNon);
+          });
+          state.scores[ui.winner] += eachNon*2 + dealerPay + sticksBonus;
+          entry.type='自摸'; entry.detail = `${state.players[ui.winner]} 自摸 ${hanFuLabel} 莊付${fmt(dealerPay)}/閒付${fmt(eachNon)}`;
+        }
+      }
+      state.riichiSticks = 0;
+      pushHistory(entry);
+      nextRound(isDealer);
+    }
+
+    entry.scores = state.scores.slice();
+
+    render();
+    for(let i=0;i<4;i++){ const d = state.scores[i]-before[i]; if(d!==0) flashDelta(i,d); }
+    await saveState();
+    syncToSheet(entry);
+    closeWinModal();
+  }
+
+  // ---------- riichi declare (tap wind chip area long-press alt: use card double tap) ----------
+  function toggleRiichi(seatIdx){
+    if(state.riichiActive[seatIdx]){
+      // allow un-declare only as a quick fix
+      state.riichiActive[seatIdx] = false;
+      state.scores[seatIdx] += 1000;
+      state.riichiSticks = Math.max(0, state.riichiSticks-1);
+    } else {
+      if(state.scores[seatIdx] < 1000) return;
+      state.riichiActive[seatIdx] = true;
+      state.scores[seatIdx] -= 1000;
+      state.riichiSticks += 1;
+    }
+    render();
+    saveState();
+  }
+
+  // ---------- history modal ----------
+  function renderHistory(){
+    const list = document.getElementById('historyList');
+    if(!state.history.length){ list.innerHTML = '<div class="empty">尚無對局紀錄</div>'; return; }
+    list.innerHTML = state.history.slice(0,50).map(h=>`
+      <div class="history-item">
+        <div class="t1">${h.round} · ${h.type}</div>
+        <div class="t2">${h.detail||''}</div>
+      </div>
+    `).join('');
+  }
+
+  // ---------- sheet sync ----------
+  function renderSheetStatus(){
+    const dot = document.getElementById('sheetStatusDot');
+    const text = document.getElementById('sheetStatusText');
+    if(!state.sheetUrl){
+      dot.className='dot-status'; text.textContent='尚未設定同步網址';
+    } else {
+      dot.className='dot-status ok'; text.textContent='已設定同步網址(送出後無法確認伺服器回應，請以 Sheet 內容為準)';
+    }
+  }
+  async function syncToSheet(entry){
+    if(!state.sheetUrl) return;
+    try{
+      await fetch(state.sheetUrl, {
+        method:'POST',
+        mode:'no-cors',
+        headers:{'Content-Type':'text/plain'},
+        body: JSON.stringify({
+          time: entry.time,
+          round: entry.round,
+          honba: entry.honba,
+          type: entry.type,
+          detail: entry.detail,
+          p0name: state.players[0], p0score: state.scores[0],
+          p1name: state.players[1], p1score: state.scores[1],
+          p2name: state.players[2], p2score: state.scores[2],
+          p3name: state.players[3], p3score: state.scores[3],
+        })
+      });
+    }catch(e){ console.error('sheet sync failed', e); }
+  }
+
+  // ---------- settings modal ----------
+  function openSettings(){
+    const wrap = document.getElementById('nameEditList');
+    wrap.innerHTML = '';
+    state.players.forEach((name,i)=>{
+      const row = document.createElement('div');
+      row.className='name-edit-row';
+      row.innerHTML = `<div class="tag">${SEAT_LABELS[i]}</div><input type="text" value="${escapeHtml(name)}" data-i="${i}">`;
+      row.querySelector('input').oninput = (e)=>{ state.players[i] = e.target.value || ('P'+(i+1)); render(); saveState(); };
+      wrap.appendChild(row);
+    });
+    document.getElementById('startPointsInput').value = state.startPoints;
+    document.getElementById('sheetUrlInput').value = state.sheetUrl || '';
+    document.querySelectorAll('#gameLenSeg button').forEach(b=>b.classList.toggle('active', b.dataset.v===state.gameLen));
+    document.getElementById('scriptCode').value = APPS_SCRIPT_CODE;
+    document.getElementById('firebaseConfigInput').value = deviceSettings.firebaseConfig ? JSON.stringify(deviceSettings.firebaseConfig, null, 2) : '';
+    document.getElementById('roomCodeInput').value = deviceSettings.roomCode || '';
+    document.getElementById('displayOnlyToggle').checked = !!deviceSettings.displayOnly;
+    renderSheetStatus();
+    renderFbStatus();
+    document.getElementById('overlaySettings').classList.add('open');
+  }
+
+  const APPS_SCRIPT_CODE = `function doPost(e) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('對局紀錄');
+  if (!sheet) {
+    sheet = ss.insertSheet('對局紀錄');
+    sheet.appendRow(['時間','局數','本場','類型','詳情','P1','分數1','P2','分數2','P3','分數3','P4','分數4']);
+  }
+  var data = JSON.parse(e.postData.contents);
+  sheet.appendRow([
+    data.time, data.round, data.honba, data.type, data.detail,
+    data.p0name, data.p0score, data.p1name, data.p1score,
+    data.p2name, data.p2score, data.p3name, data.p3score
+  ]);
+  return ContentService.createTextOutput(JSON.stringify({status:'ok'}))
+    .setMimeType(ContentService.MimeType.JSON);
+}`;
+
+  // ---------- events ----------
+  function bindEvents(){
+    document.querySelectorAll('.card').forEach(card=>{
+      let pressTimer=null;
+      const seatIdx = parseInt(card.dataset.seat,10);
+      card.addEventListener('click', ()=>{ if(deviceSettings.displayOnly) return; openWinModal(); ui.winner = seatIdx; buildWinnerSeg(); recalc(); });
+      card.addEventListener('touchstart', ()=>{ pressTimer = setTimeout(()=>{ if(!deviceSettings.displayOnly) toggleRiichi(seatIdx); }, 550); });
+      card.addEventListener('touchend', ()=>{ clearTimeout(pressTimer); });
+      card.addEventListener('mousedown', ()=>{ pressTimer = setTimeout(()=>{ if(!deviceSettings.displayOnly) toggleRiichi(seatIdx); }, 550); });
+      card.addEventListener('mouseup', ()=>{ clearTimeout(pressTimer); });
+    });
+
+    document.getElementById('hubBtn').addEventListener('click', (e)=>{
+      if(e.target.closest('.icon-btn')) return;
+      if(deviceSettings.displayOnly) return;
+      openWinModal();
+    });
+    document.getElementById('btnHistory').addEventListener('click', (e)=>{ e.stopPropagation(); document.getElementById('overlayHistory').classList.add('open'); });
+    document.getElementById('btnSettings').addEventListener('click', (e)=>{ e.stopPropagation(); openSettings(); });
+
+    document.getElementById('closeWin').onclick = closeWinModal;
+    document.getElementById('closeHistory').onclick = ()=> document.getElementById('overlayHistory').classList.remove('open');
+    document.getElementById('closeSettings').onclick = ()=> document.getElementById('overlaySettings').classList.remove('open');
+
+    document.querySelectorAll('#resultTypeSeg button').forEach(b=>{
+      b.onclick = ()=>{
+        ui.resultType = b.dataset.v;
+        document.querySelectorAll('#resultTypeSeg button').forEach(x=>x.classList.toggle('active', x===b));
+        toggleResultFields();
+        applyFuCalc(); recalcDraw();
+      };
+    });
+
+    document.querySelectorAll('#menzenSeg button').forEach(b=>{
+      b.onclick = ()=>{
+        ui.menzen = b.dataset.v==='closed';
+        document.querySelectorAll('#menzenSeg button').forEach(x=>x.classList.toggle('active', x===b));
+        buildYakuChips();
+        recomputeHanFromChips();
+        applyFuCalc();
+      };
+    });
+
+    document.querySelectorAll('#fuPairSeg button').forEach(b=>{
+      b.onclick = ()=>{
+        ui.fuPair = parseInt(b.dataset.fu,10);
+        document.querySelectorAll('#fuPairSeg button').forEach(x=>x.classList.toggle('active', x===b));
+        applyFuCalc();
+      };
+    });
+
+    document.querySelectorAll('#fuWaitSeg button').forEach(b=>{
+      b.onclick = ()=>{
+        ui.fuWait = parseInt(b.dataset.fu,10);
+        document.querySelectorAll('#fuWaitSeg button').forEach(x=>x.classList.toggle('active', x===b));
+        applyFuCalc();
+      };
+    });
+
+    document.querySelectorAll('.stepper button').forEach(b=>{
+      b.onclick = ()=>{
+        const d = parseInt(b.dataset.d,10);
+        const t = b.dataset.t;
+        if(t==='han'){ ui.han = Math.max(0, ui.han+d); document.getElementById('hanVal').textContent = ui.han; }
+        else if(t==='fu'){ ui.fu = Math.max(20, ui.fu+d); document.getElementById('fuVal').textContent = ui.fu; }
+        else if(t==='dora'){ ui.dora = Math.max(0, (ui.dora||0)+d); document.getElementById('doraVal').textContent = ui.dora; recomputeHanFromChips(); }
+        else if(t==='uradora'){ ui.uradora = Math.max(0, (ui.uradora||0)+d); document.getElementById('uradoraVal').textContent = ui.uradora; recomputeHanFromChips(); }
+        else if(t==='akadora'){ ui.akadora = Math.max(0, (ui.akadora||0)+d); document.getElementById('akadoraVal').textContent = ui.akadora; recomputeHanFromChips(); }
+        recalc();
+      };
+    });
+
+    document.getElementById('applyBtn').onclick = applyResult;
+    document.getElementById('undoLast').onclick = undoLast;
+
+    document.getElementById('applyStartPoints').onclick = ()=>{
+      const v = parseInt(document.getElementById('startPointsInput').value,10) || 25000;
+      state.startPoints = v;
+      saveState();
+    };
+    document.querySelectorAll('#gameLenSeg button').forEach(b=>{
+      b.onclick = ()=>{
+        state.gameLen = b.dataset.v;
+        document.querySelectorAll('#gameLenSeg button').forEach(x=>x.classList.toggle('active', x===b));
+        saveState();
+      };
+    });
+    document.getElementById('sheetUrlInput').addEventListener('change', (e)=>{
+      state.sheetUrl = e.target.value.trim();
+      saveState(); renderSheetStatus();
+    });
+    document.getElementById('applyFirebase').onclick = async ()=>{
+      const cfg = parseLooseConfig(document.getElementById('firebaseConfigInput').value);
+      const room = document.getElementById('roomCodeInput').value.trim();
+      if(!cfg || !cfg.databaseURL){ alert('Firebase 設定看起來不完整，請確認有貼上完整的 firebaseConfig(需包含 databaseURL)'); return; }
+      if(!room){ alert('請輸入房間代碼'); return; }
+      if(fbRef){ fbRef.off(); fbRef = null; }
+      deviceSettings.firebaseConfig = cfg;
+      deviceSettings.roomCode = room;
+      await saveDeviceSettings();
+      fbConnected = false;
+      renderFbStatus();
+      initFirebase();
+    };
+    document.getElementById('displayOnlyToggle').addEventListener('change', async (e)=>{
+      deviceSettings.displayOnly = e.target.checked;
+      await saveDeviceSettings();
+    });    document.getElementById('testSync').onclick = async ()=>{
+      if(!state.sheetUrl){ alert('請先貼上 Apps Script 網頁應用程式網址'); return; }
+      await syncToSheet({ time:new Date().toISOString(), round:'測試', honba:0, type:'連線測試', detail:'這是一筆測試紀錄' });
+      alert('已送出測試紀錄，請到你的 Google Sheet 確認是否新增了一列。');
+    };
+    document.getElementById('copyScript').onclick = async ()=>{
+      try{ await navigator.clipboard.writeText(APPS_SCRIPT_CODE); alert('已複製 Apps Script 程式碼'); }
+      catch(e){ alert('複製失敗，請手動選取下方文字方塊內容'); }
+    };
+    document.getElementById('resetGame').onclick = async ()=>{
+      if(!confirm('確定要清空所有分數與紀錄，重新開局嗎？')) return;
+      const names = state.players.slice();
+      const sp = state.startPoints;
+      const sheetUrl = state.sheetUrl;
+      const gameLen = state.gameLen;
+      state = defaultState();
+      state.players = names; state.startPoints = sp; state.scores = [sp,sp,sp,sp];
+      state.sheetUrl = sheetUrl; state.gameLen = gameLen;
+      render();
+      await saveState();
+      document.getElementById('overlaySettings').classList.remove('open');
+    };
+
+    // close overlay on backdrop click
+    document.querySelectorAll('.overlay').forEach(o=>{
+      o.addEventListener('click',(e)=>{ if(e.target===o) o.classList.remove('open'); });
+    });
+  }
+
+  async function undoLast(){
+    if(!state.history.length){ return; }
+    const last = state.history[0];
+    if(!last._prev){ alert('這筆紀錄無法復原(可能是舊版資料)'); return; }
+    if(!confirm('復原上一局的所有變化(分數、局數、莊家、供託)？')) return;
+    const p = last._prev;
+    state.scores = p.scores.slice();
+    state.dealerIndex = p.dealerIndex;
+    state.roundWind = p.roundWind;
+    state.roundNumber = p.roundNumber;
+    state.honba = p.honba;
+    state.riichiSticks = p.riichiSticks;
+    state.riichiActive = p.riichiActive.slice();
+    state.history.shift();
+    render();
+    await saveState();
+    document.getElementById('overlayHistory').classList.remove('open');
+  }
+
+  async function init(){
+    deviceSettings = await loadDeviceSettings();
+    state = await loadState();
+    bindEvents();
+    render();
+    if(deviceSettings.firebaseConfig && deviceSettings.roomCode){
+      initFirebase();
+    }
+  }
+  init();
+})();
+</script>
+</body>
+</html>
